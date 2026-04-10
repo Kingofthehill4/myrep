@@ -1,0 +1,192 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  OWNER
+  ADMIN
+}
+
+enum ProjectType {
+  MOVIE
+  SERIES
+  SHORT
+}
+
+enum ProjectStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  COMPLETED
+}
+
+enum SceneStatus {
+  DRAFT
+  READY
+  GENERATING
+  GENERATED
+  FAILED
+}
+
+enum JobType {
+  SCENE_CLIP
+  ASSEMBLY_EXPORT
+}
+
+enum JobStatus {
+  QUEUED
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum AssetType {
+  VIDEO_CLIP
+  AUDIO_TRACK
+  SUBTITLE
+  IMAGE
+  EXPORT
+}
+
+enum AssemblyStatus {
+  DRAFT
+  READY
+  EXPORTED
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  role      Role     @default(ADMIN)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Project {
+  id          String            @id @default(cuid())
+  title       String
+  slug        String            @unique
+  description String
+  type        ProjectType
+  status      ProjectStatus     @default(DRAFT)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  characters  Character[]
+  scenes      Scene[]
+  jobs        GenerationJob[]
+  assets      MediaAsset[]
+  assemblies  EpisodeAssembly[]
+}
+
+model Character {
+  id               String   @id @default(cuid())
+  projectId        String
+  name             String
+  slug             String
+  description      String
+  appearancePrompt String
+  personalityNotes String
+  voiceProfile     String
+  referenceImagePath String
+  stylePreset      String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  project          Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  dialogueLines    SceneDialogueLine[]
+  sceneLinks       SceneCharacter[]
+
+  @@unique([projectId, slug])
+}
+
+model Scene {
+  id                    String   @id @default(cuid())
+  projectId             String
+  title                 String
+  orderIndex            Int
+  durationTargetSeconds Int
+  location              String
+  mood                  String
+  cameraNotes           String
+  audioNotes            String
+  visualStyle           String
+  status                SceneStatus @default(DRAFT)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  project               Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  dialogueLines         SceneDialogueLine[]
+  sceneCharacters       SceneCharacter[]
+  jobs                  GenerationJob[]
+  assets                MediaAsset[]
+
+  @@unique([projectId, orderIndex])
+}
+
+model SceneDialogueLine {
+  id          String  @id @default(cuid())
+  sceneId      String
+  characterId  String?
+  speakerName  String
+  lineText     String
+  emotion      String
+  sortOrder    Int
+  scene        Scene @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+  character    Character? @relation(fields: [characterId], references: [id], onDelete: SetNull)
+}
+
+model SceneCharacter {
+  id          String @id @default(cuid())
+  sceneId     String
+  characterId String
+  scene       Scene @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  @@unique([sceneId, characterId])
+}
+
+model GenerationJob {
+  id          String @id @default(cuid())
+  projectId   String
+  sceneId     String?
+  type        JobType
+  status      JobStatus @default(QUEUED)
+  provider    String
+  inputJson   String
+  outputJson  String?
+  errorText   String?
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  scene       Scene? @relation(fields: [sceneId], references: [id], onDelete: SetNull)
+}
+
+model MediaAsset {
+  id           String @id @default(cuid())
+  projectId    String
+  sceneId      String?
+  type         AssetType
+  path         String
+  mimeType     String
+  metadataJson String
+  createdAt    DateTime @default(now())
+  project      Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  scene        Scene? @relation(fields: [sceneId], references: [id], onDelete: SetNull)
+}
+
+model EpisodeAssembly {
+  id           String @id @default(cuid())
+  projectId    String
+  title        String
+  description  String
+  timelineJson String
+  status       AssemblyStatus @default(DRAFT)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  project      Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
